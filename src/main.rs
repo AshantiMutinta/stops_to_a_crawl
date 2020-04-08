@@ -1,24 +1,51 @@
 #![feature(async_closure)]
 #![feature(vec_remove_item)]
 use futures::stream::{self, StreamExt};
+use pickledb::{PickleDb, PickleDbDumpPolicy, SerializationMethod};
 use scraper::{Html, Selector};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut links_in_page = crawl("https://moz.com/top500")
-        .await;
-    println!("crawled {:?}", links_in_page);
+    if let Ok(pickle) = PickleDb::load(
+        "crawl.db",
+        PickleDbDumpPolicy::AutoDump,
+        SerializationMethod::Json,
+    ) {
+        let links_in_page = pickle
+            .get_all()
+            .into_iter()
+            .filter(|s| !pickle.get::<bool>(s).unwrap_or(true))
+            .collect::<Vec<String>>();
+        crawl_websites(links_in_page, pickle).await
+    } else {
+        let pickle = PickleDb::new(
+            "crawl.db",
+            PickleDbDumpPolicy::AutoDump,
+            SerializationMethod::Json,
+        );
+        let links_in_page = crawl("https://moz.com/top500").await;
+        crawl_websites(links_in_page, pickle).await
+    };
+
+    Ok(())
+}
+
+async fn crawl_websites(mut links_in_page: Vec<String>, mut pickle: PickleDb) {
     while !links_in_page.is_empty() {
         let links_iter = links_in_page.clone().into_iter();
-       for current_page in links_iter {
+        for current_page in links_iter {
+            pickle
+                .set(&current_page, &false)
+                .expect("could not add to pickledb");
             let crawled_pages = crawl(&*current_page).await;
             println!("crawled {:?}", crawled_pages);
             links_in_page.remove_item(&current_page);
+            pickle
+                .set(&current_page, &true)
+                .expect("could not add to pickledb");
             links_in_page.extend(crawled_pages);
         }
     }
-
-    Ok(())
 }
 
 async fn crawl(website: &str) -> Vec<String> {
