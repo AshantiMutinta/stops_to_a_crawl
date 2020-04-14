@@ -23,7 +23,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             PickleDbDumpPolicy::AutoDump,
             SerializationMethod::Json,
         );
-        let links_in_page = crawl("https://moz.com/top500").await;
+        let links_in_page = crawl("https://freshysites.com/web-design-development/20-most-popular-websites-2020/").await;
         crawl_websites(links_in_page, pickle).await
     };
 
@@ -55,7 +55,7 @@ async fn crawl(website: &str) -> Vec<String> {
     };
     let html = html.await.unwrap_or_default();
     let document = Html::parse_document(&html);
-    let selector = Selector::parse("link").unwrap();
+    let selector = Selector::parse("link,a").unwrap();
     let link_tags = document
         .select(&selector)
         .filter_map(|current_link| {
